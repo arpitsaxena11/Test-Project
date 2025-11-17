@@ -1,0 +1,171 @@
+/* ------------------------------
+   Root Variables
+------------------------------ */
+:root {
+  --font-family: "Inter", Arial, sans-serif;
+  --radius: 12px;
+  --spacing: 1rem;
+
+  /* Color System */
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --text-primary: #333;
+  --text-secondary: #555;
+
+  --border: #d1d5db;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+  --brand: #0066ff;
+  --brand-hover: #0051cc;
+  --brand-disabled: #99b8ff;
+
+  --success-bg: #e0ffe4;
+  --success-text: #0f7f1a;
+
+  --error-bg: #ffe0e0;
+  --error-text: #cc0000;
+}
+
+/* ------------------------------
+   Global Reset
+------------------------------ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* ------------------------------
+   Container
+------------------------------ */
+.container {
+  max-width: 1200px;
+  margin: 4rem auto;
+  padding: 2rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+/* ------------------------------
+   Headings
+------------------------------ */
+h2 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.6rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ------------------------------
+   Form Layout
+------------------------------ */
+.card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  grid-template-columns: repeat(auto, minmax(540px, 1fr));
+  gap: 1rem;
+}
+
+/* ------------------------------
+   Inputs
+------------------------------ */
+label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+input,
+select {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--brand);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.25);
+}
+
+/* ------------------------------
+   Buttons
+------------------------------ */
+button {
+  width: 100%;
+  padding: 0.9rem;
+  font-size: 1rem;
+  font-weight: 600;
+
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+button:hover {
+  background: var(--brand-hover);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+button:disabled {
+  background: var(--brand-disabled);
+  cursor: not-allowed;
+}
+
+/* ------------------------------
+   Messages
+------------------------------ */
+.message {
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.message.success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.message.error {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
