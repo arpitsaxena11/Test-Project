@@ -1,9 +1,9 @@
 import { Routes, Route } from "react-router-dom";
-import Signup from "./pages/Signup";
-import VerifyOtp from "./pages/VerifyOtp";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import ProtectedRoute from "./ProtectedRoute";
+import Signup from "./pages/Signup.jsx";
+import VerifyOtp from "./pages/VerifyOtp.jsx";
+import Login from "./pages/Login.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import ProtectedRoute from "./ProtectedRoute.jsx";
 
 export default function App() {
   return (
@@ -11,7 +11,6 @@ export default function App() {
       <Route path="/" element={<Signup />} />
       <Route path="/verify-otp" element={<VerifyOtp />} />
       <Route path="/login" element={<Login />} />
-
       <Route
         path="/dashboard"
         element={

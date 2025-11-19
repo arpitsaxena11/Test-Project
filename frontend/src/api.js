@@ -7,25 +7,35 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" }
 });
 
-export function signup(data) {
-  return api.post("/api/auth/signup", data).then((res) => res.data);
-}
-
-export function generateOtp(user_id) {
-  return api.post("/api/auth/generate-otp", { user_id }).then((res) => res.data);
-}
-
-export function verifyOtp(user_id, otp) {
-  return api.post("/api/auth/verify-otp", { user_id, otp }).then((res) => res.data);
-}
-
-export function login(data) {
-  return api.post("/api/auth/login", data).then((res) => res.data);
-}
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((cfg) => {
   const token = localStorage.getItem("token");
-  if (token) config.headers.Authorization = "Bearer " + token;
-  return config;
+  if (token) cfg.headers.Authorization = "Bearer " + token;
+  return cfg;
 });
+
+export async function signup(data) {
+  return (await api.post("/api/auth/signup", data)).data;
+}
+
+export async function generateOtp(user_id) {
+  return (await api.post("/api/auth/generate-otp", { user_id })).data;
+}
+export async function verifyOtp({ user_id, otp }) {
+  try {
+    const res = await api.post("/api/auth/verify-otp", {
+      user_id,   // NOT nested!
+      otp
+    });
+    return res.data;
+  } catch (err) {
+    console.error("Verify OTP API Error:", err);
+    return { error: true };
+  }
+}
+
+
+export async function login(data) {
+  return (await api.post("/api/auth/login", data)).data;
+}
 
 export default api;
