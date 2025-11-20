@@ -1,29 +1,41 @@
+// backend/routes/auth.js
 import express from "express";
+import { getPool, sql } from "../dbConfig.js";
+import { sendOtpEmail } from "../mailer.js";
 import jwt from "jsonwebtoken";
-import { sql } from "../db.js";
-import { sha256Hex } from "../utils/hashPassword.js";
-import { websiteExists } from "./../utils/websiteCheck.js";
-import { config } from "dotenv";
 
 const router = express.Router();
 
-/* ============================================================
-   GET STATES  (SP: get_state)
-============================================================ */
+/**
+ * Verify website exists (HEAD request)
+ */
+router.post("/verify-website", async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.json({ exists: false });
+
+  try {
+    const normalized = url.startsWith("http") ? url : `https://${url}`;
+    const resp = await fetch(normalized, { method: "HEAD" });
+    res.json({ exists: resp.ok });
+  } catch (err) {
+    console.error("Website verify error:", err.message);
+    res.json({ exists: false });
+  }
+});
+
+/**
+ * Get states from state_mst table
+ */
 router.get("/get-states", async (req, res) => {
   try {
-    const pool = await sql.connect(config);
-
-    const result = await pool.request().query(`
-      SELECT 
-        State AS id,
-        State_Name_EN AS name
-      FROM state_mst
-      WHERE Status = 'A'
-      ORDER BY State_Name_EN
-    `);
-
-    res.json(result.recordset);
+    const pool = await getPool();
+    const result = await pool.request().execute("get_state");
+    // assume SP returns columns: State (id), State_Name_EN (name)
+    const rows = (result.recordset || []).map((r) => ({
+      id: r.State,
+      name: r.State_Name_EN,
+    }));
+    res.json(rows);
   } catch (err) {
     console.error("State fetch error:", err);
     res.status(500).json([]);
@@ -31,76 +43,129 @@ router.get("/get-states", async (req, res) => {
 });
 
 
-/* ============================================================
-   VERIFY WEBSITE EXISTS
-============================================================ */
-router.post("/verify-website", async (req, res) => {
-  const { url } = req.body;
-  const exists = await websiteExists(url);
-  return res.json({ exists });
-});
-
-/* ============================================================
-   SIGNUP (SP: InsertClientMasterData)
-============================================================ */
+/**
+ * Signup – calls InsertClientMasterData
+ */
 router.post("/signup", async (req, res) => {
+  const form = req.body;
+  console.log("SIGNUP payload:", form);
+
   try {
-    const d = req.body;
-    console.log("SIGNUP payload:", d);
+    const pool = await getPool();
+    const q = pool.request();
 
-    const pool = await sql.connect();
-    const reqSP = pool.request();
+    q.input("client_name", sql.NVarChar(100), form.client_name ?? null)
+      .input(
+        "client_organization_name",
+        sql.NVarChar(100),
+        form.client_organization_name ?? null
+      )
+      .input(
+        "PrimaryContactNum",
+        sql.Int,
+        form.PrimaryContactNum ? Number(form.PrimaryContactNum) : null
+      )
+      .input("country_code", sql.NVarChar(50), form.country_code ?? null)
+      .input("email", sql.NVarChar(50), form.email ?? null)
+      .input("web_url", sql.NVarChar(300), form.web_url ?? null)
+      .input("insta_url", sql.NVarChar(300), form.insta_url ?? null)
+      .input(
+        "whatsappCountryCode",
+        sql.Int,
+        form.whatsappCountryCode ? Number(form.whatsappCountryCode) : null
+      )
+      .input("address", sql.NVarChar(100), form.address ?? null)
+      .input("postcode", sql.NVarChar(20), form.postcode ?? null)
+      .input("facebook_url", sql.NVarChar(300), form.facebook_url ?? null)
+      .input(
+        "paid_or_not",
+        sql.Int,
+        typeof form.paid_or_not === "number"
+          ? form.paid_or_not
+          : Number(form.paid_or_not || 0)
+      )
+      .input("payment_date", sql.DateTime, form.payment_date ?? null)
+      .input(
+        "License_expiry_date",
+        sql.DateTime,
+        form.License_expiry_date ?? null
+      )
+      .input(
+        "paymount_amount",
+        sql.Int,
+        form.paymount_amount ? Number(form.paymount_amount) : null
+      )
+      .input(
+        "Whatsapp_Number",
+        sql.Int,
+        form.Whatsapp_Number ? Number(form.Whatsapp_Number) : null
+      )
+      .input(
+        "Aratai_Number",
+        sql.Int,
+        form.Aratai_Number ? Number(form.Aratai_Number) : null
+      )
+      .input(
+        "Aratai_Country_Code",
+        sql.NVarChar(50),
+        form.Aratai_Country_Code ?? null
+      )
+      .input("usrname", sql.NVarChar(50), form.usrname ?? null)
+      .input("passrd", sql.NVarChar(500), form.passrd ?? null)
+      .input("gst_no", sql.NVarChar(50), form.gst_no ?? null)
+      .input("Pan_no", sql.VarChar(50), form.Pan_no ?? null)
+      .input(
+        "state",
+        sql.Int,
+        form.state ? Number(form.state) : null
+      );
 
-    reqSP.input("client_name", sql.NVarChar(100), d.client_name);
-    reqSP.input("client_organization_name", sql.NVarChar(100), d.client_organization_name);
-    reqSP.input("PrimaryContactNum", sql.Int, d.PrimaryContactNum);
-    reqSP.input("country_code", sql.NVarChar(50), d.country_code);
-    reqSP.input("email", sql.NVarChar(50), d.email);
-    reqSP.input("web_url", sql.NVarChar(300), d.web_url);
-    reqSP.input("insta_url", sql.NVarChar(300), d.insta_url);
-    reqSP.input("whatsappCountryCode", sql.Int, d.whatsappCountryCode);
-    reqSP.input("address", sql.NVarChar(100), d.address);
-    reqSP.input("postcode", sql.NVarChar(20), d.postcode);
-    reqSP.input("facebook_url", sql.NVarChar(300), d.facebook_url);
-    reqSP.input("paid_or_not", sql.Int, d.paid_or_not);
-    reqSP.input("payment_date", sql.DateTime, d.payment_date);
-    reqSP.input("License_expiry_date", sql.DateTime, d.License_expiry_date);
-    reqSP.input("paymount_amount", sql.Int, d.paymount_amount);
-    reqSP.input("Whatsapp_Number", sql.Int, d.Whatsapp_Number);
-    reqSP.input("Aratai_Number", sql.Int, d.Aratai_Number);
-    reqSP.input("Aratai_Country_Code", sql.NVarChar(50), d.Aratai_Country_Code);
-    reqSP.input("usrname", sql.NVarChar(50), d.usrname);
-    reqSP.input("passrd", sql.NVarChar(500), d.passrd);
-
-    // NEW FIELDS FROM YOUR DOCUMENT
-
-    const result = await reqSP.execute("InsertClientMasterData");
+    const result = await q.execute("InsertClientMasterData");
     console.log("InsertClientMasterData result:", result.recordset);
 
-    return res.json(result.recordset[0]); // { rid: ... }
+    const rid = result.recordset?.[0]?.rid ?? null;
+    res.json({ rid, email: form.email });
   } catch (err) {
     console.error("Signup Error:", err);
-    res.status(500).json({ rid: -1, error: err.message });
+    // If you see "too many arguments specified" here,
+    // it means the SP in SQL Server does NOT yet have @gst_no, @Pan_no, @state.
+    res.status(500).json({ rid: -1, error: "Server Error" });
   }
 });
 
-/* ============================================================
-   GENERATE OTP (SP: Generate_Insert)
-============================================================ */
+
+/**
+ * Generate OTP – calls Generate_Insert and emails OTP
+ */
 router.post("/generate-otp", async (req, res) => {
+  const { user_id, email } = req.body;
+  console.log("generate-otp => Received", { user_id, email });
+
+  if (!user_id) {
+    return res.status(400).json({ error: "user_id is required" });
+  }
+
   try {
-    const { user_id } = req.body;
+    const pool = await getPool();
 
-    console.log("generate-otp => Received user_id:", user_id);
-
-    const pool = await sql.connect();
-
-    const result = await pool.request()
-      .input("Userid", sql.BigInt, user_id)
+    // Call stored procedure to generate OTP
+    await pool
+      .request()
+      .input("Userid", sql.BigInt, Number(user_id))
       .execute("Generate_Insert");
 
-    // The OTP is inside PasswordResets table — latest record for UserId
-    const otp = result.recordset[0][""];  // Your SP returns column with no name
+    // Fetch latest OTP from PasswordResets
+    const otpResult = await pool
+      .request()
+      .input("Userid", sql.BigInt, Number(user_id))
+      .query(
+        `SELECT TOP 1 ResetToken
+         FROM PasswordResets
+         WHERE UserId = @Userid
+         ORDER BY CreatedAt DESC`
+      );
+
+    const otp = otpResult.recordset?.[0]?.ResetToken;
 
     console.log("====================================");
     console.log("📩 OTP GENERATED");
@@ -108,111 +173,112 @@ router.post("/generate-otp", async (req, res) => {
     console.log("OTP      :", otp);
     console.log("====================================");
 
-    return res.json({ otp });
-
-  } catch (err) {
-    console.error("Generate OTP Error:", err);
-    return res.status(500).json({ error: "OTP generation failed" });
-  }
-});
-
-
-/* ============================================================
-   VERIFY OTP (SP: Verify_Auth)
-============================================================ */
-router.post("/verify-otp", async (req, res) => {
-  try {
-    const { user_id, otp } = req.body;
-
-    console.log("Verifying OTP", { user_id, otp });
-
-    if (!user_id || !otp) {
-      return res.status(400).json({ error: "Missing user_id or otp" });
+    if (email && otp) {
+      try {
+        await sendOtpEmail(email, otp);
+      } catch (mailErr) {
+        console.error("Failed to send OTP email:", mailErr);
+      }
     }
 
-    const pool = await sql.connect();
-
-    const result = await pool
-      .request()
-      .input("Userid", sql.BigInt, Number(user_id)) // ✅ FIXED
-      .input("Token", sql.NVarChar(400), String(otp)) // ✅ FIXED
-      .execute("Verify_Auth");
-
-    console.log("DB OTP Result:", result.recordset);
-
-    const row = result.recordset[0];
-
-    return res.json({
-      retcode: row?.RETCODE,
-      message: row?.Msg,
-    });
-
+    res.json({ success: true });
   } catch (err) {
-    console.error("Verify OTP Error:", err);
+    console.error("Generate OTP Error:", err);
     res.status(500).json({ error: "Server Error" });
   }
 });
 
 
 
-
-
-/* ============================================================
-   LOGIN (email OR username)
-============================================================ */
+// POST /api/auth/login
+// body: { loginId: string (email or username), password: string (SHA-256 hash) }
 router.post("/login", async (req, res) => {
-  try {
-    const { usernameOrEmail, password } = req.body;
-    const hashed = sha256Hex(password);
+  const { loginId, password } = req.body; // password already encrypted on frontend
 
-    const pool = await sql.connect();
-    const result = await pool.request()
-      .input("username", sql.NVarChar(100), usernameOrEmail)
-      .input("email", sql.NVarChar(100), usernameOrEmail)
+  if (!loginId || !password) {
+    return res.status(400).json({ message: "loginId and password are required" });
+  }
+
+  try {
+    const pool = await getPool();
+
+    const result = await pool
+      .request()
+      .input("loginId", sql.NVarChar(100), loginId)
+      .input("password", sql.NVarChar(500), password)
       .query(`
-        SELECT TOP 1 *
+        SELECT TOP 1 id, user_name, email, mobile_no, is_active
         FROM user_master
-        WHERE (username = @username OR email = @email)
-          AND passrd = '${hashed}'
+        WHERE (email = @loginId OR user_name = @loginId)
+          AND password = @password
       `);
 
-    if (result.recordset.length === 0)
-      return res.json({ error: "Invalid credentials" });
+    if (!result.recordset || result.recordset.length === 0) {
+      return res.status(401).json({ message: "Invalid email/username or password" });
+    }
 
     const user = result.recordset[0];
 
+    if (user.is_active === 0) {
+      return res.status(403).json({ message: "User is inactive. Contact support." });
+    }
+
+    const secret = process.env.JWT_SECRET || "dev-secret";
     const token = jwt.sign(
-      { user_id: user.user_id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { userId: user.id, email: user.email },
+      secret,
+      { expiresIn: "1h" }
     );
 
-    res.json({ token });
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        user_name: user.user_name,
+        email: user.email,
+        mobile_no: user.mobile_no,
+      },
+    });
   } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error("Login Error:", err);
+    res.status(500).json({ message: "Server Error" });
   }
 });
 
-/* ============================================================
-   AUTH USER DETAILS (Dashboard)
-============================================================ */
-router.get("/me", async (req, res) => {
+
+
+
+
+/**
+ * Verify OTP – calls Verify_Auth
+ */
+router.post("/verify-otp", async (req, res) => {
+  const { user_id, otp } = req.body;
+  console.log("Verifying OTP", { user_id, otp });
+
+  if (!user_id || !otp) {
+    return res
+      .status(400)
+      .json({ retcode: 0, msg: "Missing user_id or otp" });
+  }
+
   try {
-    const header = req.headers.authorization;
-    if (!header) return res.status(401).json({ error: "No token" });
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input("Userid", sql.BigInt, Number(user_id))
+      .input("Token", sql.NVarChar(200), String(otp))
+      .execute("Verify_Auth");
 
-    const token = header.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const row = result.recordset?.[0] || {};
+    console.log("DB OTP Result:", row);
 
-    const pool = await sql.connect();
-    const result = await pool.request()
-      .input("id", sql.BigInt, decoded.user_id)
-      .query(`SELECT * FROM client_master_data WHERE id = @id`);
-
-    res.json({ user: result.recordset[0] });
+    const retcode = row.retcode ?? -99;
+    const msg = row.msg ?? "Unknown error";
+    res.json({ retcode, msg });
   } catch (err) {
-    res.status(401).json({ error: "Invalid token" });
+    console.error("Verify OTP Error:", err);
+    res.status(500).json({ retcode: -99, msg: "Server Error" });
   }
 });
 

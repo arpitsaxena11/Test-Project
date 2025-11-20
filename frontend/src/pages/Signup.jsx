@@ -1,6 +1,7 @@
+// frontend/src/pages/Signup.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { signup, generateOtp } from "../api";
+import { signup, generateOtp, checkWebsite, getStates } from "../api";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export default function Signup() {
     client_name: "",
     client_organization_name: "",
     PrimaryContactNum: "",
-    country_code: "",
+    country_code: "91",
     email: "",
     web_url: "",
     insta_url: "",
@@ -22,32 +23,30 @@ export default function Signup() {
     address: "",
     postcode: "",
     facebook_url: "",
-    paid_or_not: "0",
+    paid_or_not: "1",
     payment_date: "",
     License_expiry_date: "",
     paymount_amount: "",
     Whatsapp_Number: "",
     Aratai_Number: "",
-    Aratai_Country_Code: "",
+    Aratai_Country_Code: "91",
     usrname: "",
     passrd: "",
     gst_no: "",
     Pan_no: "",
-    state: ""
+    state: "",
   });
 
   useEffect(() => {
-    loadStates();
+    (async () => {
+      try {
+        const st = await getStates();
+        setStates(st || []);
+      } catch (err) {
+        console.error("State load failed:", err);
+      }
+    })();
   }, []);
-
-  async function loadStates() {
-    try {
-      const r = await api.get("/api/auth/get-states");
-      setStates(r.data || []);
-    } catch (err) {
-      console.error("State load failed:", err);
-    }
-  }
 
   function update(e) {
     const { name, value } = e.target;
@@ -55,10 +54,11 @@ export default function Signup() {
   }
 
   function validate() {
-    if (!form.client_name) return "Client Name is required";
-    if (!form.email) return "Email is required";
-    if (!form.passrd) return "Password is required";
-    if (!usernameSame && !form.usrname) return "Username is required";
+    if (!form.client_name.trim()) return "Client Name is required";
+    if (!form.email.trim()) return "Email is required";
+    if (!form.passrd.trim()) return "Password is required";
+    if (!usernameSame && !form.usrname.trim())
+      return "Username is required";
     if (!form.state) return "Please select a State";
     return null;
   }
@@ -71,17 +71,7 @@ export default function Signup() {
       .join("");
   }
 
-  async function websiteExists(url) {
-    if (!url) return true;
-    try {
-      const r = await api.post("/api/auth/verify-website", { url });
-      return r.data?.exists === true;
-    } catch {
-      return false;
-    }
-  }
-
-  async function submit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setMsg(null);
 
@@ -89,280 +79,382 @@ export default function Signup() {
     if (v) return setMsg({ type: "error", text: v });
 
     setLoading(true);
-
     try {
-      // Validate website
+      // Website exists check
       if (form.web_url) {
-        const ok = await websiteExists(form.web_url);
-        if (!ok) {
+        const res = await checkWebsite(form.web_url);
+        if (!res.exists) {
           setLoading(false);
           return setMsg({
             type: "error",
-            text: "Website does not exist"
+            text: "Website does not exist / not reachable",
           });
         }
       }
 
       const payload = { ...form };
 
-      // Username rule
+      // Username rule: same as email or custom
       payload.usrname = usernameSame ? payload.email : payload.usrname;
 
-      // Convert empty strings to null
-      Object.keys(payload).forEach((k) => {
-        if (payload[k] === "") payload[k] = null;
-      });
-
-      // Numeric conversions
-      payload.PrimaryContactNum = payload.PrimaryContactNum ? Number(payload.PrimaryContactNum) : null;
-      payload.whatsappCountryCode = payload.whatsappCountryCode ? Number(payload.whatsappCountryCode) : 91;
-      payload.paymount_amount = payload.paymount_amount ? Number(payload.paymount_amount) : null;
-      payload.Whatsapp_Number = payload.Whatsapp_Number ? Number(payload.Whatsapp_Number) : null;
-      payload.Aratai_Number = payload.Aratai_Number ? Number(payload.Aratai_Number) : null;
-      payload.state = payload.state ? Number(payload.state) : null;
-      payload.paid_or_not = Number(payload.paid_or_not);
+      // convert numbers
+      payload.PrimaryContactNum = form.PrimaryContactNum
+        ? Number(form.PrimaryContactNum)
+        : null;
+      payload.whatsappCountryCode = form.whatsappCountryCode
+        ? Number(form.whatsappCountryCode)
+        : null;
+      payload.paymount_amount = form.paymount_amount
+        ? Number(form.paymount_amount)
+        : null;
+      payload.Whatsapp_Number = form.Whatsapp_Number
+        ? Number(form.Whatsapp_Number)
+        : null;
+      payload.Aratai_Number = form.Aratai_Number
+        ? Number(form.Aratai_Number)
+        : null;
+      payload.state = form.state ? Number(form.state) : null;
+      payload.paid_or_not = Number(form.paid_or_not);
 
       // Encrypt password
-      payload.passrd = await sha256(payload.passrd);
+      payload.passrd = await sha256(form.passrd);
 
       console.log("SIGNUP Sending:", payload);
 
       const res = await signup(payload);
       console.log("SIGNUP Response:", res);
 
-      // ------- SP STATUS CODE HANDLING (DOCUMENT EXACT) -------
-      if (res.rid === -4) {
-        return setMsg({
-          type: "error",
-          text: "Exception occurred — Contact info@ovigroup.co.in"
-        });
-      }
+      const rid = res?.rid;
 
-      if (res.rid === -3) {
-        return setMsg({
-          type: "error",
-          text: "GST already exists — Contact info@ovigroup.co.in"
-        });
-      }
-
-      if (res.rid === -2) {
+      if (typeof rid !== "number") {
         setMsg({
           type: "error",
-          text: "Duplicate Email — Redirecting to Login..."
+          text: "Unexpected response from server",
         });
-        setTimeout(() => navigate("/login"), 800);
         return;
       }
 
-      if (res.rid === -1) {
-        return setMsg({
+      // Status mapping from doc
+      if (rid === -4) {
+        setMsg({
           type: "error",
-          text: "Signup Error"
+          text: "Exception — Contact info@ovigroup.co.in",
         });
+        return;
       }
 
-      if (!res.rid || res.rid <= 0) {
-        return setMsg({
+      if (rid === -3) {
+        setMsg({
           type: "error",
-          text: "Unexpected SP Response"
+          text: "GST already exists — Contact info@ovigroup.co.in",
         });
+        return;
+      }
+
+      if (rid === -2) {
+  setMsg({
+    type: "error",
+    text: "This email is already registered. Redirecting to Sign In...",
+  });
+  setTimeout(() => {
+    navigate("/login", { state: { email: payload.email } });
+  }, 1000);
+  return;
+}
+
+      if (rid === -1) {
+        setMsg({ type: "error", text: "Signup Error Occurred" });
+        return;
+      }
+
+      if (rid <= 0) {
+        setMsg({ type: "error", text: "Unexpected SP status" });
+        return;
       }
 
       // SUCCESS
-      const user_id = res.rid;
+      const user_id = rid;
 
-      await generateOtp(user_id);
+      // Generate & email OTP
+      await generateOtp(user_id, form.email);
 
-      navigate("/verify-otp", {
-        state: { user_id, email: payload.email }
+      setMsg({
+        type: "success",
+        text: "Signup successful! OTP sent to your email.",
       });
 
+      // go to OTP page
+      setTimeout(() => {
+        navigate("/verify-otp", {
+          state: { email: form.email, user_id },
+        });
+      }, 600);
     } catch (err) {
-      console.error(err);
-      setMsg({ type: "error", text: "Server Error" });
+      console.error("Signup error:", err);
+      setMsg({ type: "error", text: "Server Error during signup" });
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="container">
-      <h2>Create Account</h2>
-
-      <form onSubmit={submit}>
-
-        {/* CLIENT NAME */}
-        <div className="row">
-          <label>Client Name *</label>
-          <input name="client_name" value={form.client_name} onChange={update} />
-        </div>
-
-        {/* ORGANIZATION NAME */}
-        <div className="row">
-          <label>Organization Name</label>
-          <input name="client_organization_name" value={form.client_organization_name} onChange={update} />
-        </div>
-
-        {/* PRIMARY CONTACT NUMBER */}
-        <div className="row">
-          <label>Primary Contact Number</label>
-          <input type="number" name="PrimaryContactNum" value={form.PrimaryContactNum} onChange={update} />
-        </div>
-
-        {/* COUNTRY CODE */}
-        <div className="row">
-          <label>Country Code</label>
-          <input name="country_code" value={form.country_code} onChange={update} />
-        </div>
-
-        {/* EMAIL */}
-        <div className="row">
-          <label>Email *</label>
-          <input type="email" name="email" value={form.email} onChange={update} />
-        </div>
-
-        {/* USERNAME SAME AS EMAIL */}
-        <div className="row">
-          <label>Username same as Email?</label>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <label>
-              <input type="radio" checked={usernameSame} onChange={() => setUsernameSame(true)} /> Yes
-            </label>
-            <label>
-              <input type="radio" checked={!usernameSame} onChange={() => setUsernameSame(false)} /> No
-            </label>
-          </div>
-        </div>
-
-        {/* USERNAME TEXTBOX */}
-        {!usernameSame && (
-          <div className="row">
-            <label>Username</label>
-            <input name="usrname" value={form.usrname} onChange={update} />
-          </div>
-        )}
-
-        {/* PASSWORD */}
-        <div className="row">
-          <label>Password *</label>
-          <input type="password" name="passrd" value={form.passrd} onChange={update} />
-        </div>
-
-        {/* WEBSITE */}
-        <div className="row">
-          <label>Website URL</label>
-          <input name="web_url" value={form.web_url} onChange={update} placeholder="https://example.com" />
-        </div>
-
-        {/* INSTAGRAM */}
-        <div className="row">
-          <label>Instagram URL</label>
-          <input name="insta_url" value={form.insta_url} onChange={update} />
-        </div>
-
-        {/* WHATSAPP COUNTRY CODE */}
-        <div className="row">
-          <label>Whatsapp Country Code</label>
-          <input type="number" name="whatsappCountryCode" value={form.whatsappCountryCode} onChange={update} />
-        </div>
-
-        {/* ADDRESS */}
-        <div className="row">
-          <label>Address</label>
-          <input name="address" value={form.address} onChange={update} />
-        </div>
-
-        {/* POSTCODE */}
-        <div className="row">
-          <label>Postcode</label>
-          <input name="postcode" value={form.postcode} onChange={update} />
-        </div>
-
-        {/* FACEBOOK */}
-        <div className="row">
-          <label>Facebook URL</label>
-          <input name="facebook_url" value={form.facebook_url} onChange={update} />
-        </div>
-
-        {/* STATE DROPDOWN */}
-        <div className="row">
-          <label>State *</label>
-          <select name="state" value={form.state} onChange={update}>
-            <option value="">-- Select State --</option>
-            {states.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* GST */}
-        <div className="row">
-          <label>GST No.</label>
-          <input name="gst_no" value={form.gst_no} onChange={update} />
-        </div>
-
-        {/* PAN */}
-        <div className="row">
-          <label>PAN No.</label>
-          <input name="Pan_no" value={form.Pan_no} onChange={update} />
-        </div>
-
-        {/* PAID */}
-        <div className="row">
-          <label>Paid or Not</label>
-          <select name="paid_or_not" value={form.paid_or_not} onChange={update}>
-            <option value="0">Not Paid</option>
-            <option value="1">Paid</option>
-          </select>
-        </div>
-
-        {/* PAYMENT DATE */}
-        <div className="row">
-          <label>Payment Date</label>
-          <input type="datetime-local" name="payment_date" value={form.payment_date} onChange={update} />
-        </div>
-
-        {/* LICENSE EXPIRY */}
-        <div className="row">
-          <label>License Expiry Date</label>
-          <input type="datetime-local" name="License_expiry_date" value={form.License_expiry_date} onChange={update} />
-        </div>
-
-        {/* PAYMENT AMOUNT */}
-        <div className="row">
-          <label>Payment Amount</label>
-          <input type="number" name="paymount_amount" value={form.paymount_amount} onChange={update} />
-        </div>
-
-        {/* WHATSAPP NUMBER */}
-        <div className="row">
-          <label>Whatsapp Number</label>
-          <input type="number" name="Whatsapp_Number" value={form.Whatsapp_Number} onChange={update} />
-        </div>
-
-        {/* ARATAI NUMBER */}
-        <div className="row">
-          <label>Aratai Number</label>
-          <input type="number" name="Aratai_Number" value={form.Aratai_Number} onChange={update} />
-        </div>
-
-        {/* ARATAI COUNTRY */}
-        <div className="row">
-          <label>Aratai Country Code</label>
-          <input name="Aratai_Country_Code" value={form.Aratai_Country_Code} onChange={update} />
-        </div>
-
-        {/* SUBMIT BUTTON */}
-        <button disabled={loading}>
-          {loading ? "Submitting..." : "Sign Up"}
-        </button>
+    <div className="page">
+      <div className="card">
+        <h1 className="title">Client Sign Up</h1>
 
         {msg && (
-          <div className={`message ${msg.type}`}>
+          <div
+            className={
+              msg.type === "error" ? "alert alert-error" : "alert alert-ok"
+            }
+          >
             {msg.text}
           </div>
         )}
-      </form>
+
+        <form onSubmit={handleSubmit} className="form-grid">
+          <label>
+            Client Name *
+            <input
+              name="client_name"
+              value={form.client_name}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Organization Name
+            <input
+              name="client_organization_name"
+              value={form.client_organization_name}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Primary Contact Number
+            <input
+              name="PrimaryContactNum"
+              value={form.PrimaryContactNum}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Country Code
+            <input
+              name="country_code"
+              value={form.country_code}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Email *
+            <input
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Web URL
+            <input
+              name="web_url"
+              value={form.web_url}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Instagram URL
+            <input
+              name="insta_url"
+              value={form.insta_url}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            WhatsApp Country Code
+            <input
+              name="whatsappCountryCode"
+              value={form.whatsappCountryCode}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Address
+            <input
+              name="address"
+              value={form.address}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Postcode
+            <input
+              name="postcode"
+              value={form.postcode}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Facebook URL
+            <input
+              name="facebook_url"
+              value={form.facebook_url}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Paid or Not
+            <select
+              name="paid_or_not"
+              value={form.paid_or_not}
+              onChange={update}
+            >
+              <option value="0">Free</option>
+              <option value="1">Paid</option>
+            </select>
+          </label>
+
+          <label>
+            Payment Date
+            <input
+              type="datetime-local"
+              name="payment_date"
+              value={form.payment_date}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            License Expiry Date
+            <input
+              type="datetime-local"
+              name="License_expiry_date"
+              value={form.License_expiry_date}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Payment Amount
+            <input
+              name="paymount_amount"
+              value={form.paymount_amount}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            WhatsApp Number
+            <input
+              name="Whatsapp_Number"
+              value={form.Whatsapp_Number}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Aratai Number
+            <input
+              name="Aratai_Number"
+              value={form.Aratai_Number}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            Aratai Country Code
+            <input
+              name="Aratai_Country_Code"
+              value={form.Aratai_Country_Code}
+              onChange={update}
+            />
+          </label>
+
+          <label>
+            GST No
+            <input name="gst_no" value={form.gst_no} onChange={update} />
+          </label>
+
+          <label>
+            PAN No
+            <input name="Pan_no" value={form.Pan_no} onChange={update} />
+          </label>
+
+          <label>
+            State *
+            <select name="state" value={form.state} onChange={update}>
+              <option value="">-- Select State --</option>
+              {states.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="full-width">
+            <div className="radio-row">
+              <span>Username same as Email?</span>
+              <label>
+                <input
+                  type="radio"
+                  checked={usernameSame}
+                  onChange={() => setUsernameSame(true)}
+                />
+                Yes
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  checked={!usernameSame}
+                  onChange={() => setUsernameSame(false)}
+                />
+                No
+              </label>
+            </div>
+          </div>
+
+          {!usernameSame && (
+            <label className="full-width">
+              Username
+              <input
+                name="usrname"
+                value={form.usrname}
+                onChange={update}
+              />
+            </label>
+          )}
+
+          <label className="full-width">
+            Password *
+            <input
+              type="password"
+              name="passrd"
+              value={form.passrd}
+              onChange={update}
+            />
+          </label>
+
+          <button
+            className="btn primary full-width"
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? "Submitting..." : "Sign Up"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

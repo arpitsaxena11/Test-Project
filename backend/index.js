@@ -1,38 +1,27 @@
+// backend/index.js
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import { sql, config } from "./db.js";
-import authRouter from "./routes/auth.js";
-
-dotenv.config();
+import authRoutes from "./routes/auth.js";
+import { getPool } from "./dbConfig.js";
 
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 5000;
+
 app.use(cors());
+app.use(express.json());
 
-// SHOW DB CONNECTION ON STARTUP
-async function connectDB() {
-    console.log("⏳ Connecting to MS SQL...");
+app.use("/api/auth", authRoutes);
 
-    try {
-        await sql.connect(config);
-
-        console.log("======================================");
-        console.log("✅ DATABASE CONNECTED SUCCESSFULLY!");
-        console.log("Server   :", process.env.SQL_SERVER);
-        console.log("Database :", process.env.SQL_DATABASE);
-        console.log("User     :", process.env.SQL_USER);
-        console.log("======================================");
-    } catch (err) {
-        console.log("❌ DB CONNECTION FAILED!");
-        console.error(err);
-    }
-}
-
-connectDB();
-
-app.use("/api/auth", authRouter);
-
-app.listen(5000, () => {
-    console.log("🚀 Server running on port 5000");
+app.get("/", (req, res) => {
+  res.send("Backend running");
 });
+
+// Ensure DB connect (logs nice message) but still start server
+getPool()
+  .catch(() => {})
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  });
