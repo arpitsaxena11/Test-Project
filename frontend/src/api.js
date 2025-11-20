@@ -31,8 +31,8 @@ export async function checkWebsite(url) {
 }
 
 export async function getStates() {
-  const { data } = await api.get("/api/auth/get-states");
-  return data;
+  const res = await api.get("/api/auth/get-states");
+  return res.data;
 }
 export const login = async (payload) => {
   const { data } = await api.post("/api/auth/login", payload);

@@ -26,21 +26,26 @@ router.post("/verify-website", async (req, res) => {
 /**
  * Get states from state_mst table
  */
+// GET /api/auth/get-states
 router.get("/get-states", async (req, res) => {
   try {
     const pool = await getPool();
-    const result = await pool.request().execute("get_state");
-    // assume SP returns columns: State (id), State_Name_EN (name)
-    const rows = (result.recordset || []).map((r) => ({
-      id: r.State,
-      name: r.State_Name_EN,
-    }));
-    res.json(rows);
+
+    const result = await pool
+      .request()
+      .query(
+        "SELECT State AS id, State_Name_EN AS name FROM state_mst WHERE Status = 'A'"
+      );
+
+    console.log("States from state_mst:", result.recordset);
+    res.json(result.recordset || []);
   } catch (err) {
     console.error("State fetch error:", err);
     res.status(500).json([]);
   }
 });
+
+
 
 
 /**

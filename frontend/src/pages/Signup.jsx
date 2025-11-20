@@ -1,7 +1,15 @@
-// frontend/src/pages/Signup.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { signup, generateOtp, checkWebsite, getStates } from "../api";
+
+// password hash helper (same as used earlier)
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(hash)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -57,18 +65,9 @@ export default function Signup() {
     if (!form.client_name.trim()) return "Client Name is required";
     if (!form.email.trim()) return "Email is required";
     if (!form.passrd.trim()) return "Password is required";
-    if (!usernameSame && !form.usrname.trim())
-      return "Username is required";
+    if (!usernameSame && !form.usrname.trim()) return "Username is required";
     if (!form.state) return "Please select a State";
     return null;
-  }
-
-  async function sha256(text) {
-    const data = new TextEncoder().encode(text);
-    const hash = await crypto.subtle.digest("SHA-256", data);
-    return [...new Uint8Array(hash)]
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
   }
 
   async function handleSubmit(e) {
@@ -76,28 +75,34 @@ export default function Signup() {
     setMsg(null);
 
     const v = validate();
-    if (v) return setMsg({ type: "error", text: v });
+    if (v) {
+      setMsg({ type: "error", text: v });
+      return;
+    }
 
     setLoading(true);
+
     try {
-      // Website exists check
+      // 1) Website exists check
       if (form.web_url) {
         const res = await checkWebsite(form.web_url);
         if (!res.exists) {
           setLoading(false);
-          return setMsg({
+          setMsg({
             type: "error",
             text: "Website does not exist / not reachable",
           });
+          return;
         }
       }
 
+      // 2) Build payload exactly as SP expects
       const payload = { ...form };
 
-      // Username rule: same as email or custom
+      // username logic
       payload.usrname = usernameSame ? payload.email : payload.usrname;
 
-      // convert numbers
+      // numeric fields
       payload.PrimaryContactNum = form.PrimaryContactNum
         ? Number(form.PrimaryContactNum)
         : null;
@@ -116,7 +121,7 @@ export default function Signup() {
       payload.state = form.state ? Number(form.state) : null;
       payload.paid_or_not = Number(form.paid_or_not);
 
-      // Encrypt password
+      // encrypt password
       payload.passrd = await sha256(form.passrd);
 
       console.log("SIGNUP Sending:", payload);
@@ -134,7 +139,7 @@ export default function Signup() {
         return;
       }
 
-      // Status mapping from doc
+      // handle SP status codes
       if (rid === -4) {
         setMsg({
           type: "error",
@@ -146,36 +151,32 @@ export default function Signup() {
       if (rid === -3) {
         setMsg({
           type: "error",
-          text: "GST already exists — Contact info@ovigroup.co.in",
+          text:
+            "GST already exists in Merchant master. Contact info@ovigroup.co.in",
         });
         return;
       }
 
       if (rid === -2) {
-  setMsg({
-    type: "error",
-    text: "This email is already registered. Redirecting to Sign In...",
-  });
-  setTimeout(() => {
-    navigate("/login", { state: { email: payload.email } });
-  }, 1000);
-  return;
-}
-
-      if (rid === -1) {
-        setMsg({ type: "error", text: "Signup Error Occurred" });
+        setMsg({
+          type: "error",
+          text: "This email is already registered. Redirecting to Sign In...",
+        });
+        setTimeout(() => {
+          navigate("/login", { state: { email: payload.email } });
+        }, 1000);
         return;
       }
 
-      if (rid <= 0) {
-        setMsg({ type: "error", text: "Unexpected SP status" });
+      if (rid === -1 || rid <= 0) {
+        setMsg({ type: "error", text: "Signup Error. Please try again." });
         return;
       }
 
       // SUCCESS
       const user_id = rid;
 
-      // Generate & email OTP
+      // generate OTP & send email
       await generateOtp(user_id, form.email);
 
       setMsg({
@@ -183,7 +184,6 @@ export default function Signup() {
         text: "Signup successful! OTP sent to your email.",
       });
 
-      // go to OTP page
       setTimeout(() => {
         navigate("/verify-otp", {
           state: { email: form.email, user_id },

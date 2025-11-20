@@ -2,11 +2,11 @@
 import sql from "mssql";
 
 const dbConfig = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_NAME,
-  port: parseInt(process.env.DB_PORT || "1433", 10),
+  user: process.env.SQL_USER,
+  password: process.env.SQL_PASSWORD,
+  server: process.env.SQL_SERVER,
+  database: process.env.SQL_DATABASE,
+  port: parseInt(process.env.SQL_PORT || "1433", 10),
   options: {
     encrypt: false,
     trustServerCertificate: true,
@@ -21,6 +21,15 @@ const dbConfig = {
 let poolPromise = null;
 
 export function getPool() {
+  // Debug print — VERY IMPORTANT
+  console.log("DEBUG ENV VALUES:", {
+    SQL_USER: process.env.SQL_USER,
+    SQL_PASSWORD: process.env.SQL_PASSWORD ? "******" : undefined,
+    SQL_SERVER: process.env.SQL_SERVER,
+    SQL_DATABASE: process.env.SQL_DATABASE,
+    SQL_PORT: process.env.SQL_PORT,
+  });
+
   if (!poolPromise) {
     console.log("⏳ Connecting to MS SQL...");
     poolPromise = sql
@@ -28,9 +37,9 @@ export function getPool() {
       .then((pool) => {
         console.log("======================================");
         console.log("✅ DATABASE CONNECTED SUCCESSFULLY!");
-        console.log("Server   :", process.env.DB_SERVER);
-        console.log("Database :", process.env.DB_NAME);
-        console.log("User     :", process.env.DB_USER);
+        console.log("Server   :", process.env.SQL_SERVER);
+        console.log("Database :", process.env.SQL_DATABASE);
+        console.log("User     :", process.env.SQL_USER);
         console.log("======================================");
         return pool;
       })
