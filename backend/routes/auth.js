@@ -169,24 +169,48 @@ router.post("/generate-otp", async (req, res) => {
   try {
     const pool = await getPool();
 
-    // Call stored procedure to generate OTP
-    await pool
+    // 1) Call SP
+    const spResult = await pool
       .request()
       .input("Userid", sql.BigInt, Number(user_id))
       .execute("Generate_Insert");
 
-    // Fetch latest OTP from PasswordResets
-    const otpResult = await pool
-      .request()
-      .input("Userid", sql.BigInt, Number(user_id))
-      .query(
-        `SELECT TOP 1 ResetToken
-         FROM PasswordResets
-         WHERE UserId = @Userid
-         ORDER BY CreatedAt DESC`
-      );
+    console.log("Generate_Insert result:", {
+      recordset: spResult.recordset,
+      output: spResult.output,
+      returnValue: spResult.returnValue,
+    });
 
-    const otp = otpResult.recordset?.[0]?.ResetToken;
+    // 2) Try to pick OTP from SP result
+    let otp = null;
+
+    const row0 = spResult.recordset?.[0] || {};
+    // Try the likely column names
+    otp =
+      row0.ResetToken ||
+      row0.resetToken ||
+      row0.reset_token ||
+      row0.OTP ||
+      row0.otp ||
+      row0.Token ||
+      row0.token ||
+      null;
+
+    // 3) Fallback – if still not found, read from PasswordResets
+    if (!otp) {
+      const otpResult = await pool
+        .request()
+        .input("Userid", sql.BigInt, Number(user_id))
+        .query(
+          `SELECT TOP 1 ResetToken
+           FROM PasswordResets
+           WHERE UserId = @Userid
+           ORDER BY CreatedAt DESC`
+        );
+
+      console.log("PasswordResets rows:", otpResult.recordset);
+      otp = otpResult.recordset?.[0]?.ResetToken || null;
+    }
 
     console.log("====================================");
     console.log("📩 OTP GENERATED");
@@ -194,12 +218,15 @@ router.post("/generate-otp", async (req, res) => {
     console.log("OTP      :", otp);
     console.log("====================================");
 
+    // 4) Send email if we finally have an OTP
     if (email && otp) {
       try {
-        await sendOtpEmail(email, otp);
+        await sendOtpEmail(email, String(otp));
       } catch (mailErr) {
-        console.error("Failed to send OTP email:", mailErr);
+        console.error("❌ Failed to send OTP email:", mailErr);
       }
+    } else {
+      console.warn("No OTP found to send (email or otp missing).");
     }
 
     res.json({ success: true });
@@ -208,6 +235,7 @@ router.post("/generate-otp", async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 });
+
 
 
 

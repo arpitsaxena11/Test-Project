@@ -372,7 +372,7 @@ export default function Signup() {
               value={form.paid_or_not}
               onChange={update}
             >
-              <option value="0">Free</option>
+              <option value="0">Not Paid</option>
               <option value="1">Paid</option>
             </select>
           </label>
@@ -426,11 +426,18 @@ export default function Signup() {
 
           <label>
             Aratai Country Code
-            <input
+            <select
               name="Aratai_Country_Code"
               value={form.Aratai_Country_Code}
               onChange={update}
-            />
+            >
+              <option value="">-- Select Country --</option>
+              {countries.map((c) => (
+                <option key={c.country_name} value={c.country_name}>
+                  {c.country_name} ({c.country_code})
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
