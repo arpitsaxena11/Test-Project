@@ -45,6 +45,22 @@ router.get("/get-states", async (req, res) => {
   }
 });
 
+// GET /api/auth/get-country-codes
+router.get("/get-country-codes", async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    // call SP get_Country_Code
+    const result = await pool.request().execute("get_Country_Code");
+
+    // Expecting columns: country_name, country_code
+    console.log("Country codes:", result.recordset);
+    res.json(result.recordset || []);
+  } catch (err) {
+    console.error("Country code fetch error:", err);
+    res.status(500).json([]);
+  }
+});
 
 
 

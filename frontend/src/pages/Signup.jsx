@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signup, generateOtp, checkWebsite, getStates } from "../api";
+import { signup, generateOtp, checkWebsite, getStates, getCountryCodes } from "../api";
 
 // password hash helper (same as used earlier)
 async function sha256(text) {
@@ -15,6 +15,8 @@ export default function Signup() {
   const navigate = useNavigate();
   const [states, setStates] = useState([]);
   const [usernameSame, setUsernameSame] = useState(true);
+  const [countries, setCountries] = useState([]);
+
 
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,13 +50,52 @@ export default function Signup() {
   useEffect(() => {
     (async () => {
       try {
-        const st = await getStates();
+        const [st, ct] = await Promise.all([
+          getStates(),
+          getCountryCodes(),
+        ]);
         setStates(st || []);
+        setCountries(ct || []);
       } catch (err) {
-        console.error("State load failed:", err);
+        console.error("Initial data load failed:", err);
       }
     })();
   }, []);
+
+
+
+
+
+  function handleCountryChange(e) {
+    const selectedName = e.target.value;
+    const selected = countries.find(
+      (c) => c.country_name === selectedName
+    );
+
+    if (!selected) {
+      // reset if blank
+      setForm((prev) => ({
+        ...prev,
+        country_code: "",
+        whatsappCountryCode: "",
+      }));
+      return;
+    }
+
+    // Extracting numeric part from "+91", "+1-242", etc.
+    const numericCode = (selected.country_code || "")
+      .replace("+", "")
+      .replace(/[^0-9]/g, "");
+
+    setForm((prev) => ({
+      ...prev,
+      country_code: selected.country_name,        // <- inserting into @country_code
+      whatsappCountryCode: numericCode,           // <- inserting into @whatsappCountryCode (INT)
+    }));
+  }
+
+
+
 
   function update(e) {
     const { name, value } = e.target;
@@ -67,6 +108,7 @@ export default function Signup() {
     if (!form.passrd.trim()) return "Password is required";
     if (!usernameSame && !form.usrname.trim()) return "Username is required";
     if (!form.state) return "Please select a State";
+    if (!form.country_code) return "Please select a Country";
     return null;
   }
 
@@ -241,13 +283,21 @@ export default function Signup() {
           </label>
 
           <label>
-            Country Code
-            <input
+            Country *
+            <select
               name="country_code"
               value={form.country_code}
-              onChange={update}
-            />
+              onChange={handleCountryChange}
+            >
+              <option value="">-- Select Country --</option>
+              {countries.map((c) => (
+                <option key={c.country_name} value={c.country_name}>
+                  {c.country_name} ({c.country_code})
+                </option>
+              ))}
+            </select>
           </label>
+
 
           <label>
             Email *
@@ -277,14 +327,16 @@ export default function Signup() {
             />
           </label>
 
+
           <label>
             WhatsApp Country Code
             <input
               name="whatsappCountryCode"
               value={form.whatsappCountryCode}
-              onChange={update}
+              readOnly
             />
           </label>
+
 
           <label>
             Address
