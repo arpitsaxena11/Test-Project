@@ -200,23 +200,13 @@ router.post("/generate-otp", async (req, res) => {
     if (!otp) {
       const otpResult = await pool
         .request()
-        .input("Userid", sql.BigInt, Number(user_id))
-        .query(
-          `SELECT TOP 1 ResetToken
-           FROM PasswordResets
-           WHERE UserId = @Userid
-           ORDER BY CreatedAt DESC`
-        );
-
-      console.log("PasswordResets rows:", otpResult.recordset);
+        .input("Userid", sql.BigInt, Number(user_id));
       otp = otpResult.recordset?.[0]?.ResetToken || null;
     }
 
-    console.log("====================================");
     console.log("📩 OTP GENERATED");
     console.log("User ID :", user_id);
     console.log("OTP      :", otp);
-    console.log("====================================");
 
     // 4) Send email if we finally have an OTP
     if (email && otp) {

@@ -21,26 +21,16 @@ const dbConfig = {
 let poolPromise = null;
 
 export function getPool() {
-  // Debug print — VERY IMPORTANT
-  console.log("DEBUG ENV VALUES:", {
-    SQL_USER: process.env.SQL_USER,
-    SQL_PASSWORD: process.env.SQL_PASSWORD ? "******" : undefined,
-    SQL_SERVER: process.env.SQL_SERVER,
-    SQL_DATABASE: process.env.SQL_DATABASE,
-    SQL_PORT: process.env.SQL_PORT,
-  });
 
   if (!poolPromise) {
     console.log("⏳ Connecting to MS SQL...");
     poolPromise = sql
       .connect(dbConfig)
       .then((pool) => {
-        console.log("======================================");
         console.log("✅ DATABASE CONNECTED SUCCESSFULLY!");
         console.log("Server   :", process.env.SQL_SERVER);
         console.log("Database :", process.env.SQL_DATABASE);
         console.log("User     :", process.env.SQL_USER);
-        console.log("======================================");
         return pool;
       })
       .catch((err) => {
