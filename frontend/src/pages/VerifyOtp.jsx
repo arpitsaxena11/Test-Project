@@ -1,4 +1,3 @@
-// frontend/src/pages/VerifyOtp.jsx
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { verifyOtp, generateOtp } from "../api";
@@ -28,10 +27,11 @@ export default function VerifyOtp() {
     "-1": "OTP expired.",
     "-2": "OTP already used.",
     "-3": "Retry limit exceeded.",
-    "-4": "Account blocked.",
-    "-99": "Server Error.",
+    "-4": "Blocked.",
+    "-99": "Internal Server Error.",
   };
 
+  // ---------------------- VERIFY OTP ------------------------
   async function handleVerify(e) {
     e.preventDefault();
     setMsg(null);
@@ -43,20 +43,22 @@ export default function VerifyOtp() {
     setLoading(true);
 
     try {
-      const res = await verifyOtp({ user_id, otp });
+      const res = await verifyOtp({ user_id, otp: otp.trim() });
       console.log("Verify response:", res);
 
       const ret = res?.retcode ?? -99;
       const text = messages[String(ret)] || "Unknown response";
 
       if (ret === 1) {
-        // Success
+        // OTP VERIFIED SUCCESS
         setMsg({ type: "success", text });
-        setTimeout(() => navigate("/dashboard"), 800);
-      } else {
-        // ❗ Clear OTP for any failed attempt
-        setOtp("");
 
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 1000);
+      } else {
+        // FAIL → clear OTP input
+        setOtp("");
         setMsg({ type: "error", text });
       }
     } catch (err) {
@@ -67,7 +69,7 @@ export default function VerifyOtp() {
     }
   }
 
-
+  // ---------------------- RESEND OTP ------------------------
   async function handleResend() {
     setMsg(null);
     try {
@@ -108,6 +110,7 @@ export default function VerifyOtp() {
             <input
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
+              maxLength={6}
             />
           </label>
 
@@ -117,7 +120,6 @@ export default function VerifyOtp() {
           >
             {loading ? "Verifying..." : "Verify OTP"}
           </button>
-
         </form>
 
         <button

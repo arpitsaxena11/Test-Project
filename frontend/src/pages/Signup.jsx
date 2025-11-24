@@ -195,7 +195,7 @@ export default function Signup() {
             email: form.email
           },
         });
-      }, 800);
+      }, 1200);
 
     } catch (err) {
       console.error("Signup error:", err);

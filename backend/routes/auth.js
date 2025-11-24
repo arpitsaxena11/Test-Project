@@ -269,9 +269,7 @@ router.post("/verify-otp", async (req, res) => {
   console.log("Verifying OTP", { user_id, otp });
 
   if (!user_id || !otp) {
-    return res
-      .status(400)
-      .json({ retcode: 0, msg: "Missing user_id or otp" });
+    return res.status(400).json({ retcode: 0, msg: "Missing user_id or otp" });
   }
 
   try {
@@ -279,37 +277,27 @@ router.post("/verify-otp", async (req, res) => {
 
     const result = await pool
       .request()
-      .input("Userid", sql.BigInt, Number(user_id))
-      .input("Token", sql.NVarChar(200), String(otp).trim())
-      .output("RETCODE", sql.Int)
-      .output("Msg", sql.NVarChar(4000))
+      .input("UserId", sql.BigInt, Number(user_id))
+      .input("Token", sql.NVarChar(200), String(otp))
       .execute("Verify_Auth");
 
     console.log("Verify_Auth raw result:", result);
 
-    // 1. Read output params FIRST (most reliable)
-    let retcode = result.output?.RETCODE;
-    let msg = result.output?.Msg;
-
-    // 2. If SP returned a recordset, use it only if not null
-    if (result.recordset?.length > 0) {
-      const row = result.recordset[0];
-      retcode = row.retcode ?? retcode;
-      msg = row.msg ?? msg;
-    }
-
-    // 3. If still missing, set defaults
-    retcode = retcode ?? -99;
-    msg = msg ?? "Unknown error";
-
-    console.log("Parsed OTP result:", { retcode, msg });
+    // The SP returns retcode & msg in result.recordset[0]
+    let retcode = result.recordset?.[0]?.RetCode ?? -99;
+    let msg = result.recordset?.[0]?.Msg ?? "Unknown error";
 
     return res.json({ retcode, msg });
+
   } catch (err) {
     console.error("Verify OTP Error:", err);
     return res.status(500).json({ retcode: -99, msg: "Server Error" });
   }
 });
+
+
+
+
 
 
 export default router;
