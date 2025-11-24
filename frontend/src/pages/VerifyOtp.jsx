@@ -35,10 +35,13 @@ export default function VerifyOtp() {
   async function handleVerify(e) {
     e.preventDefault();
     setMsg(null);
+
     if (!otp.trim()) {
       return setMsg({ type: "error", text: "Please enter OTP" });
     }
+
     setLoading(true);
+
     try {
       const res = await verifyOtp({ user_id, otp });
       console.log("Verify response:", res);
@@ -47,9 +50,13 @@ export default function VerifyOtp() {
       const text = messages[String(ret)] || "Unknown response";
 
       if (ret === 1) {
+        // Success
         setMsg({ type: "success", text });
         setTimeout(() => navigate("/dashboard"), 800);
       } else {
+        // ❗ Clear OTP for any failed attempt
+        setOtp("");
+
         setMsg({ type: "error", text });
       }
     } catch (err) {
@@ -59,6 +66,7 @@ export default function VerifyOtp() {
       setLoading(false);
     }
   }
+
 
   async function handleResend() {
     setMsg(null);
@@ -103,9 +111,13 @@ export default function VerifyOtp() {
             />
           </label>
 
-          <button className="btn primary full-width" disabled={loading}>
+          <button
+            className="btn primary full-width"
+            disabled={loading || otp.length < 4}
+          >
             {loading ? "Verifying..." : "Verify OTP"}
           </button>
+
         </form>
 
         <button
