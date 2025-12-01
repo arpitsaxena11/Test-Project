@@ -1,6 +1,6 @@
 # signup-form
 
-Fullstack signup flow: React frontend + Node/Express backend. Connects to MS SQL and invokes stored procedures described in the user's document.
+Fullstack signup flow: React frontend + Node/Express backend. Connects to MS SQL and invokes stored procedures described in the yours document.
 
 ## Setup
 
